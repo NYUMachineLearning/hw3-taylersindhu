@@ -1,0 +1,185 @@
+---
+title: "Hw 3 Tayler Sindhu"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, include=FALSE}
+library(caret)
+library(ROCR)
+library(pROC)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(ggfortify)
+library(glmnet)
+library(tidyverse)
+library(mlbench)
+```
+# Homework
+
+## Lasso
+
+1. Split data into training and test set (from lab)
+```{r}
+train_size <- floor(0.75 * nrow(airquality))
+set.seed(543)
+train_pos <- sample(seq_len(nrow(airquality)), size = train_size)
+train_regression <- airquality[train_pos,-c(1,2)]
+test_regression <- airquality[-train_pos,-c(1,2)]
+```
+
+2. Create and train model 
+```{r}
+# Renaming
+
+lasso_train_regression <- train_regression
+lasso_test_regression <- test_regression
+
+set.seed(100)
+ctrl =  trainControl(method = "cv", number = 10)
+
+Lasso_regression <- train(Temp ~ Wind + Month, data = lasso_train_regression,
+                          method = 'lasso', trControl= ctrl)
+```
+
+```{r}
+Lasso_regression 
+```
+
+Examine the residuals 
+```{r}
+lasso_test_pred <- predict(Lasso_regression, newdata = lasso_test_regression)
+
+#plot the predicted values vs the observed values
+
+plot_lasso_test_pred <- data.frame(Temp_test_pred = lasso_test_pred, 
+                                   Observed_Temp = lasso_test_regression$Temp)
+ggplot(data = plot_lasso_test_pred) +
+  geom_point(aes(x=Observed_Temp, y = Temp_test_pred)) + 
+  ggtitle("True Temp Value vs Predicted Temp Value Lasso") +
+  theme_bw()
+
+#median residual value should be close to zero
+median(resid(Lasso_regression))
+```
+
+#Homework:
+
+1. Use the Breast Cancer dataset from the mlbench package, and predict whether the cancer is malignant or benign using one of the algorithms we learned about in class. Give some rationale as to why you chose this algorithm. Plot ROC curves, and confusion matrices. If you are choosing a hyperparameter like K or lambda, explain how and why you chose it. 
+```{r}
+# loads data
+data(BreastCancer)
+summary(BreastCancer)
+str(BreastCancer)
+BreastCancer
+```
+
+```{r message=FALSE, warning=FALSE}
+# Drop ID column
+BreastCancer <- within(BreastCancer, rm(Id))
+
+# Remove NA values
+BreastCancer <- na.omit(BreastCancer)
+
+# Change independent variables to numeric from ordinal
+BreastCancer[,1:9] <- sapply(X = BreastCancer[,1:9], FUN=as.numeric)
+str(BreastCancer)
+
+# train
+train_size_br <- floor(0.75 * nrow(BreastCancer))
+set.seed(50)
+train_pos_br <- sample(seq_len(nrow(BreastCancer)), size = train_size_br)
+
+train_regression_br <- BreastCancer[train_pos_br,]
+
+# test
+test_regression_br <- BreastCancer[-train_pos_br,]
+
+# This problem represents a classification model (predicting benign vs. malignant,) so we will not use linear regression. Other models that we have learned include logistic regression, LDA, QDA, and KNN. I chose multiple logistic regression because it does not make assumptions about the distribution of the data, n is sufficiently large, and is often used for two-class models.
+
+# Testing to make sure that independent variables are not correlated
+# Examining dataframe without outcomes column
+cor(BreastCancer[,1:9], use = "pairwise.complete.obs")
+
+# Remove variables with strong correlations (>0.7) and rerun analysis
+BreastCancer <- within(BreastCancer, rm(Cell.size, Cell.shape))
+cor(BreastCancer[,1:7], use = "pairwise.complete.obs")
+
+#create model
+# I chose bootstrap due to wide applicability
+ctrl <- trainControl(method = "boot", classProbs = T, savePredictions = T)
+
+logistic_regression_br <- train(Class ~ Cl.thickness + Cell.size + Cell.shape + Marg.adhesion + Epith.c.size + Bare.nuclei + Bl.cromatin + Normal.nucleoli + Mitoses, data = train_regression_br, method = "glm", family= "binomial", trControl = ctrl)
+
+logistic_regression_br
+summary(logistic_regression_br)
+```
+
+```{r}
+# Using test set
+
+# predict cancer status
+logistic_regression_predict_class_br <- predict(logistic_regression_br, 
+                                             newdata = test_regression_br)
+
+# confusion matrix
+confusionMatrix(logistic_regression_predict_class_br, 
+                reference = test_regression_br$Class)
+```
+
+```{r message=FALSE, warning=FALSE}
+# ROC curve
+auc_br <- roc(predictor = logistic_regression_br$pred$malignant,
+                                         response = logistic_regression_br$pred$obs)$auc
+
+plot(x = roc(predictor = logistic_regression_br$pred$malignant,
+             response = logistic_regression_br$pred$obs)$specificities, 
+     y = roc(predictor = logistic_regression_br$pred$malignant, 
+             response = logistic_regression_br$pred$obs)$sensitivities,
+     col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity",
+     xlab = "Specificity")
+legend("bottomright", legend = paste("malignant v benign --", auc_br
+                                     , sep = ""), col = c("blue"), fill = c("blue"))
+
+
+```
+
+
+```{r fig.height=3, fig.width=3}
+# Evaluates if log odds and independent variables are linearly correlated
+
+logistic_regression_predict_br <- predict(logistic_regression_br, 
+                                       newdata = test_regression_br, type = "prob")
+
+# Convert from probability to odds
+
+odds_class1 <- logistic_regression_predict_br[,1] / (1 - logistic_regression_predict_br[,1])
+log_odds_class1 <- log(odds_class1)
+```
+```{r}
+# Run correlation tests on each variable, which appear reasonable correlated with log odds.
+
+# Cl.thickness
+cor.test(log_odds_class1, test_regression_br$Cl.thickness)
+
+# Marg.adhesion
+cor.test(log_odds_class1, test_regression_br$Marg.adhesion)
+
+# Epith.c.size
+cor.test(log_odds_class1, test_regression_br$Epith.c.size)
+
+# Bare.nuclei
+cor.test(log_odds_class1, test_regression_br$Bare.nuclei)
+
+# Bl.cromatin
+cor.test(log_odds_class1, test_regression_br$Bl.cromatin)
+
+# Normal.nucleoli
+cor.test(log_odds_class1, test_regression_br$Normal.nucleoli)
+
+# Mitoses
+cor.test(log_odds_class1, test_regression_br$Mitoses)
+```
