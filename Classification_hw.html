@@ -1888,10 +1888,9 @@ logistic_regression_br</code></pre>
 # predict cancer status
 logistic_regression_predict_class_br &lt;- predict(logistic_regression_br, 
                                              newdata = test_regression_br)
-
 # confusion matrix
 confusionMatrix(logistic_regression_predict_class_br, 
-                reference = test_regression_br$Class)</code></pre>
+                reference = test_regression_br$Class, positive = &quot;malignant&quot;)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##            Reference
@@ -1908,16 +1907,16 @@ confusionMatrix(logistic_regression_predict_class_br,
 ##                                           
 ##  Mcnemar's Test P-Value : 1               
 ##                                           
-##             Sensitivity : 0.9735          
-##             Specificity : 0.9655          
-##          Pos Pred Value : 0.9821          
-##          Neg Pred Value : 0.9492          
-##              Prevalence : 0.6608          
-##          Detection Rate : 0.6433          
-##    Detection Prevalence : 0.6550          
+##             Sensitivity : 0.9655          
+##             Specificity : 0.9735          
+##          Pos Pred Value : 0.9492          
+##          Neg Pred Value : 0.9821          
+##              Prevalence : 0.3392          
+##          Detection Rate : 0.3275          
+##    Detection Prevalence : 0.3450          
 ##       Balanced Accuracy : 0.9695          
 ##                                           
-##        'Positive' Class : benign          
+##        'Positive' Class : malignant       
 ## </code></pre>
 <pre class="r"><code># ROC curve
 auc_br &lt;- roc(predictor = logistic_regression_br$pred$malignant,
